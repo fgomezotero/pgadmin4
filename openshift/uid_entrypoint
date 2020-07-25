@@ -1,0 +1,7 @@
+#!/bin/sh
+if ! whoami &> /dev/null; then
+  if [ -w /etc/passwd ]; then
+    echo "pgadmin4-default:x:$(id -u):0:pgadmin4 user,,,:/home/pgadmin:/sbin/nologin" >> /etc/passwd
+  fi
+fi
+exec "$@"

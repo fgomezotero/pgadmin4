@@ -1,0 +1,144 @@
+apiVersion: v1
+kind: Template
+metadata:
+  name: pgadmin4-template
+  author: "Franklin Gómez Otero"
+  annotations:
+    openshift.io/display-name: "PostgreSQL Management Tool (Ephemeral)"
+    openshift.io/documentation-url: "https://www.pgadmin.org/"
+    description: >-
+      pgAdmin 4 is a rewrite of the popular pgAdmin3 management tool for the
+      PostgreSQL (http://www.postgresql.org) database. 
+labels:
+  app: pgadmin4
+
+message: "Enjoy the tool ... Wait a few minutes for it to be ready !!!"
+
+# PARAMETERS
+parameters:
+  - name: NAME
+    description: "App name"
+    value: pgadmin4
+    required: true
+  - name: MAIL
+    description: "Mail to be used on login page"
+    value: admin@domain.local
+    required: true
+  - name: PASSWD
+    description: "Password to be used on login page"
+    value: admin
+    required: true
+
+objects:
+
+# ImageStream
+- apiVersion: v1
+  kind: ImageStream
+  metadata:
+    name: ${NAME}
+  spec:
+    lookupPolicy:
+      local: false
+    tags:
+      - annotations: null
+        from:
+          kind: DockerImage
+          name: 'fgomezotero/pgadmin4-openshift'
+        generation: 8
+        importPolicy: {}
+        name: latest
+        referencePolicy:
+          type: Source
+  status:
+    dockerImageRepository: ""
+
+
+# DeploymentConfig    
+- apiVersion: v1
+  kind: DeploymentConfig
+  metadata:
+    name: ${NAME}
+  spec:
+    replicas: 1
+    selector:
+      app: pgadmin4
+      deploymentconfig: ${NAME}
+    template:
+      metadata:
+        labels:
+          app: pgadmin4
+          deploymentconfig: ${NAME}
+      spec:
+        containers:
+        - env:
+          - name: PGADMIN_DEFAULT_EMAIL
+            value: ${MAIL}
+          - name: PGADMIN_DEFAULT_PASSWORD
+            value: ${PASSWD}
+          image: ${NAME}
+          imagePullPolicy: Always
+          name: ${NAME}
+          ports:
+          - containerPort: 80
+            protocol: TCP
+          - containerPort: 443
+            protocol: TCP
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+          - mountPath: /var/lib/pgadmin
+            name: ${NAME}-data
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext: {}
+        terminationGracePeriodSeconds: 30
+        volumes:
+        - emptyDir: {}
+          name: ${NAME}-data
+    test: false
+    triggers:
+    - type: ConfigChange
+    - imageChangeParams:
+        automatic: true
+        containerNames:
+        - ${NAME}
+        from:
+          kind: ImageStreamTag
+          name: ${NAME}:latest
+      type: ImageChange
+
+# Services
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: ${NAME}
+  spec:
+    ports:
+    - name: 80-tcp
+      port: 80
+      protocol: TCP
+      targetPort: 80
+    - name: 443-tcp
+      port: 443
+      protocol: TCP
+      targetPort: 443
+    selector:
+      deploymentconfig: ${NAME}
+    sessionAffinity: None
+    type: ClusterIP
+
+# Routes
+- apiVersion: v1
+  kind: Route
+  metadata:
+    name: ${NAME}
+  spec:
+    port:
+      targetPort: 80-tcp
+    to:
+      kind: Service
+      name: ${NAME}
+      weight: 100
+    wildcardPolicy: None
